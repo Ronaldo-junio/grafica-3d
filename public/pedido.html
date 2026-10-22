@@ -1,1 +1,36 @@
-
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gráfica3D · Fazer pedido</title><script src="shared.js"></script>
+<style>#ms{height:52vh;min-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:14px}.m{max-width:80%;padding:9px 13px;border-radius:12px;white-space:pre-line}
+.bot{background:#2d2760;border:1px solid var(--v);align-self:flex-start}.me{background:linear-gradient(90deg,var(--a),var(--g));color:var(--ac);font-weight:500;align-self:flex-end}#sg{display:flex;gap:6px;flex-wrap:wrap;min-height:34px;padding:8px 0}#sg button{border-radius:999px}
+form{display:flex;gap:8px}form input{flex:1;font-size:16px}</style></head><body><main><h1>Fale com a gente e faça seu pedido</h1>
+<div class="card" style="padding:0"><div id="ms" aria-live="polite"></div></div><div id="sg"></div>
+<form id="f"><input id="i" autocomplete="off" placeholder="Ex.: quero 2 chaveiros, um vazo, peça personalizada…" aria-label="Mensagem"><button class="p">Enviar</button></form></main>
+<script>shell('pedido');const N={um:1,uma:1,dois:2,duas:2,tres:3,quatro:4,cinco:5,seis:6,dez:10};
+let S='start',cart=[],cur=null,cust=null,total=0,nome='';
+const say=(t,w='bot')=>{$('#ms').insertAdjacentHTML('beforeend',`<div class="m ${w}">${esc(t)}</div>`);$('#ms').scrollTop=1e9};
+const num=t=>{const m=norm(t).match(/\d+([.,]\d+)?/);if(m)return parseFloat(m[0].replace(',','.'));for(const w of norm(t).split(' '))if(N[w])return N[w];return null};
+const fp=q=>DB.prod.map(p=>({p,s:score(q,p.nome+' '+p.cat+' '+p.tags)})).filter(x=>x.s>=.5).sort((a,b)=>b.s-a.s).map(x=>x.p);
+const fm=q=>DB.mat.map(m=>({m,s:score(q,m.nome)})).filter(x=>x.s>=.5).sort((a,b)=>b.s-a.s).map(x=>x.m);
+const yes=t=>/\b(sim|s|ok|confirmo|isso|pode|claro|certo|quero)\b/.test(norm(t)),no=t=>/\b(nao|n|cancela|errado|volta)\b/.test(norm(t));
+function sug(){const q=$('#i').value;let l=[];if(q.length>1){if(S=='start'||S=='more')l=fp(q).slice(0,4).map(p=>p.nome);else if(S=='mat')l=fm(q).slice(0,4).map(m=>m.nome)}
+$('#sg').innerHTML=l.map(x=>`<button type="button" class="ch">${esc(x)}</button>`).join('')}
+function addItem(p,q){if(p.id!=8&&q>p.est){say(`Temos só ${p.est} de “${p.nome}” em estoque. Quantas você quer?`);return}
+cart.push({p,q});total+=p.preco*q;S='more';say(`Anotado: ${q}x ${p.nome}. Quer mais alguma coisa? (diga o que ou “só isso”)`)}
+function pick(t){const l=fp(t);if(!l.length){say('Não achei isso no catálogo. Tente outras palavras (ex.: “suporte”, “vaso”, “chaveiro”) ou diga “personalizada” para um orçamento sob medida.');return}
+const p=l[0];if(p.id==8){cust={};S='mat';say('Vamos fazer sob medida. Qual material? Temos: '+DB.mat.map(m=>m.nome).join(', ')+'.');return}
+cur=p;const q=num(t);if(q&&q>0)addItem(p,Math.round(q));else{S='qty';say(`Encontrei “${p.nome}” (${brl(p.preco)}). Quantas unidades?`)}}
+function step(t){const n=norm(t);
+if(S=='start'||S=='more'){if(S=='more'&&/\b(so isso|so|nada|fechar|finalizar|pronto|nao|n)\b/.test(n)&&!fp(t).length){S='nome';say('Perfeito! Qual é o seu nome para o pedido?');return}
+if(/personaliz|sob medida|stl|arquivo|projeto|encomenda/.test(n)){cust={};S='mat';say('Vamos fazer sob medida. Qual material? Temos: '+DB.mat.map(m=>m.nome).join(', ')+'.');return}pick(t)}
+else if(S=='qty'){const q=num(t);if(q&&q>0)addItem(cur,Math.round(q));else say('Não entendi a quantidade. Pode dizer um número, tipo “3”?')}
+else if(S=='mat'){const l=fm(t);if(!l.length){say('Não reconheci o material. Opções: '+DB.mat.map(m=>m.nome).join(', ')+'.');return}cust.m=l[0];S='desc';say(`Ótimo, ${l[0].nome}. Descreva a peça (pode colar o link do arquivo STL).`)}
+else if(S=='desc'){cust.d=t;S='peso';say('Qual o peso aproximado em gramas? Se não souber, chute: calculamos o orçamento e confirmamos depois.')}
+else if(S=='peso'){const g=Math.min(5000,Math.max(1,num(t)||100)),v=api('GET','/api/orcamento?mat='+cust.m.id+'&g='+g).j.v||0;cart.push({p:DB.prod.find(p=>p.id==8),q:1,c:{...cust,g,v}});total+=v;S='more';say(`Orçamento estimado da peça: ${brl(v)}. Quer mais alguma coisa? (diga o que ou “só isso”)`)}
+else if(S=='nome'){nome=t.trim();const r=cart.map(i=>i.c?`Sob medida: ${i.c.d} (${i.c.m.nome}, ${i.c.g}g) ${brl(i.c.v)}`:`${i.q}x ${i.p.nome}`).join('\n');S='conf';say(`Resumo, ${nome}:\n${r}\nTotal: ${brl(total)}\nConfirma o pedido?`)}
+else if(S=='conf'){if(yes(t)&&!no(t)){const r=api('POST','/api/pedido',{cli:nome,itens:cart.filter(i=>!i.c).map(i=>({id:i.p.id,q:i.q})),custom:cart.filter(i=>i.c).map(i=>({mat:i.c.m.id,desc:i.c.d,g:i.c.g}))});
+if(r.s==200){S='fim';say(`Pedido #${r.j.id} registrado! Total ${brl(r.j.total)}. Entraremos em contato para combinar pagamento e entrega. Para outro pedido, recarregue a página.`)}else say((r.j.erro||'Não consegui registrar agora.')+' Tente de novo ou diga o que ajustar.')}
+else{cart=[];total=0;S='start';say('Sem problemas, cancelei. O que você gostaria de pedir?')}}
+else say('Seu pedido já foi registrado. Recarregue a página para fazer outro.')}
+$('#f').onsubmit=e=>{e.preventDefault();const t=$('#i').value.trim();if(!t)return;$('#i').value='';say(t,'me');$('#sg').innerHTML='';step(t)};
+$('#i').oninput=sug;$('#sg').onclick=e=>{if(e.target.tagName=='BUTTON'){$('#i').value=e.target.textContent;$('#f').requestSubmit()}};
+say('Olá! Sou o assistente da Gráfica3D. O que você quer imprimir hoje? Pode escrever do seu jeito, mesmo sem o nome exato.');
+const h=location.hash.match(/p=(\d+)/);if(h){const p=DB.prod.find(x=>x.id==h[1]);if(p){$('#i').value=p.nome;$('#f').requestSubmit()}}</script></body></html>

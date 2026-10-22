@@ -1,0 +1,17 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gráfica3D · Loja</title><script src="shared.js"></script>
+<style>.hero{padding:34px 20px;border-radius:12px;background:repeating-linear-gradient(0deg,#ffffff33 0 3px,transparent 3px 9px),linear-gradient(120deg,#7c3aed,#db2777 55%,#f59e0b);margin-bottom:16px}
+.hero div{background:#120f24d9;display:inline-block;padding:12px 18px;border-radius:8px}.hero h1{margin:0}.hero p{margin:4px 0 0;color:var(--m)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.bar input{flex:1;min-width:220px;font-size:16px;padding:10px 12px;border-color:var(--a)}
+.ch{border-radius:999px;padding:5px 12px}.ch.on{background:var(--a);color:var(--ac);border-color:var(--a);font-weight:600}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}.g .card{display:flex;flex-direction:column;gap:6px;border-top-color:var(--k)}.g h3{margin:0;font-size:16px}.pr{font-size:20px;font-weight:700;color:var(--k)}.g a{margin-top:auto;text-align:center;text-decoration:none}
+.sw{height:84px;border-radius:8px;background:repeating-linear-gradient(0deg,var(--k) 0 3px,transparent 3px 7px),linear-gradient(135deg,#ffffff10,#ffffff00)}</style></head><body><main>
+<div class="hero"><div><h1>Peças impressas em 3D, sob encomenda ou pronta entrega</h1><p>Busque do seu jeito: “fone gamer”, “planta”, “presente com foto”.</p></div></div>
+<div class="bar"><input id="q" type="search" placeholder="O que você procura?" aria-label="Buscar produtos"></div>
+<div class="bar" id="cats"></div><div class="g" id="g"></div><p id="vz" hidden>Nada encontrado. <a href="pedido.html">Descreva o que precisa no chat de pedidos</a> e fazemos sob medida.</p></main>
+<script>shell('loja');let cat='Todos';const cs=['Todos',...new Set(DB.prod.map(p=>p.cat))];
+function R(){$('#cats').innerHTML=cs.map(c=>`<button class="ch ${c==cat?'on':''}" data-c="${c}">${c}</button>`).join('');
+const q=$('#q').value.trim();let l=DB.prod.filter(p=>cat=='Todos'||p.cat==cat);
+if(q)l=l.map(p=>({p,s:score(q,p.nome+' '+p.cat+' '+p.tags)})).filter(x=>x.s>=.5).sort((a,b)=>b.s-a.s).map(x=>x.p);
+$('#vz').hidden=l.length>0;$('#g').innerHTML=l.map(p=>{const s=p.id==8?'Sob encomenda':p.est<=0?'Esgotado':p.est<=5?`Últimas ${p.est} unidades`:'Em estoque';
+return`<div class="card" style="--k:var(--c${p.id%5})"><div class="sw"></div><small>${esc(p.cat)}</small><h3>${esc(p.nome)}</h3><span class="pr">${p.preco?brl(p.preco):'Sob orçamento'}</span><small class="${p.est<=5?'lo':'ok'}">${s}</small><a class="p" href="pedido.html#p=${p.id}" style="padding:8px;border-radius:8px;background:var(--k);color:var(--ac);font-weight:700">Pedir</a></div>`}).join('')}
+$('#q').oninput=R;$('#cats').onclick=e=>{if(e.target.dataset.c){cat=e.target.dataset.c;R()}};R()</script></body></html>
