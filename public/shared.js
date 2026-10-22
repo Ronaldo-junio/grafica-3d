@@ -1,10 +1,10 @@
-const K='g3d_v1',ST=['Novo','Em produção','Pronto','Entregue','Cancelado'];
+const K='g3d_v1',ST=['Novo','Em produção','Acabamento','Pronto','Enviado','Entregue','Cancelado'];
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const brl=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),today=()=>new Date().toISOString().slice(0,10);
 const norm=s=>String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ');
 function lev(a,b){const d=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let p=d[0];d[0]=i;for(let j=1;j<=b.length;j++){const t=d[j];d[j]=Math.min(d[j]+1,d[j-1]+1,p+(a[i-1]==b[j-1]?0:1));p=t}}return d[b.length]}
 function score(q,doc){const qt=norm(q).split(/\s+/).filter(Boolean),dt=norm(doc).split(/\s+/).filter(Boolean);if(!qt.length)return 0;let s=0;for(const t of qt){let b=0;for(const d of dt){const v=d==t?1:((t.length>1&&d.startsWith(t))||(d.length>3&&t.startsWith(d)))?.85:(t.length>3&&lev(t,d)<=Math.ceil(t.length/4))?.6:0;if(v>b)b=v}s+=b}return s/qt.length}
-const SC={Novo:'#22d3ee','Em produção':'#fbbf24',Pronto:'#a78bfa',Entregue:'#a3e635',Cancelado:'#f472b6'};
+const SC={Novo:'#22d3ee','Em produção':'#fbbf24',Acabamento:'#fb923c',Pronto:'#a78bfa',Enviado:'#38bdf8',Entregue:'#a3e635',Cancelado:'#f472b6'};
 function xhr(m,u,b,pin){const x=new XMLHttpRequest();x.open(m,u,false);x.setRequestHeader('content-type','application/json');if(pin)x.setRequestHeader('x-pin',pin);try{x.send(b?JSON.stringify(b):null)}catch(e){return{s:0,j:{erro:'Sem conexão com o servidor'}}}let j={};try{j=JSON.parse(x.responseText)}catch(e){}return{s:x.status,j}}
 const api=(m,u,b)=>xhr(m,u,b,sessionStorage.getItem('pin'));
 let DB;{const r=xhr('GET','/api/pub');DB=r.s==200?r.j:{prod:[],mat:[],ped:[],fin:[],erro:(r.j&&r.j.erro)||'Servidor indisponível'}}
