@@ -1,0 +1,31 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gráfica3D · Produtos e materiais</title><script src="shared.js"></script>
+<style>.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end}.f label{display:flex;flex-direction:column;font-size:13px;color:var(--m);gap:2px}.th{width:52px;height:52px;object-fit:cover;border-radius:6px;background:var(--b);display:block}.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}</style></head><body><main>
+<h1>Produtos e materiais</h1><h2>Produto da loja</h2>
+<form class="card f" id="fp"><input type="hidden" id="pid">
+<label>Nome<input id="pn" required maxlength="80"></label><label>Categoria<input id="pc" list="cl" required maxlength="30"><datalist id="cl"></datalist></label>
+<label>Preço (R$)<input id="pp" type="number" step="0.01" min="0" required></label><label>Estoque<input id="pe" type="number" min="0" step="1" required></label>
+<label>Palavras-chave da busca<input id="pt" maxlength="120" placeholder="ex.: fone gamer suporte"></label><label>Foto<input id="pf" type="file" accept="image/*"></label>
+<label style="flex-direction:row;align-items:center;gap:6px"><input id="pa" type="checkbox" checked style="width:auto"> À venda</label>
+<div class="row"><img id="pv" class="th" alt="" hidden><button class="p">Salvar produto</button><button type="button" id="pcn" hidden>Cancelar</button><small id="ps"></small></div></form>
+<div class="card w" style="margin-top:12px"><table><thead><tr><th></th><th>Produto</th><th>Preço</th><th>Estoque</th><th>Situação</th><th>Ações</th></tr></thead><tbody id="tp"></tbody></table></div>
+<h2>Material de impressão</h2>
+<form class="card f" id="fm"><input type="hidden" id="mid"><label>Nome<input id="mn" required maxlength="40" placeholder="ex.: PLA Vermelho"></label><label>Saldo (kg)<input id="mq" type="number" step="0.01" min="0" required></label>
+<label>Mínimo (kg)<input id="mm" type="number" step="0.01" min="0" required></label><label>Custo (R$/kg)<input id="mc" type="number" step="0.01" min="0" required></label>
+<div class="row"><button class="p">Salvar material</button><button type="button" id="mcn" hidden>Cancelar</button></div></form>
+<div class="card w" style="margin-top:12px"><table><thead><tr><th>Material</th><th>Saldo (kg)</th><th>Mínimo</th><th>Custo/kg</th><th>Ações</th></tr></thead><tbody id="tm"></tbody></table></div></main>
+<script>gate();shell('prod');let img='';
+const E=(u,b)=>{const r=api('POST',u,b);if(r.s!=200){alert(r.j.erro||'Erro ao salvar');return 0}reload();R();return 1};
+const rs=f=>new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const s=Math.min(1,800/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.82))};im.onerror=()=>no();im.src=URL.createObjectURL(f)});
+function setImg(u){img=u;$('#pv').hidden=!u;if(u)$('#pv').src=u}
+$('#pf').onchange=async e=>{const f=e.target.files[0];if(!f)return;$('#ps').textContent='Enviando foto…';await new Promise(r=>setTimeout(r,30));try{const r=api('POST','/api/admin/foto',{img:await rs(f)});if(r.s==200){setImg(r.j.url);$('#ps').textContent='Foto enviada ✓'}else $('#ps').textContent=r.j.erro||'Falha no envio'}catch(x){$('#ps').textContent='Não consegui ler essa imagem'}};
+function clr(){$('#fp').reset();$('#pid').value='';setImg('');$('#pcn').hidden=true;$('#ps').textContent=''}
+function ed(id){const p=DB.prod.find(x=>x.id==id);$('#pid').value=id;$('#pn').value=p.nome;$('#pc').value=p.cat;$('#pp').value=p.preco;$('#pe').value=p.est;$('#pt').value=p.tags||'';$('#pa').checked=p.ativo!==false;setImg(p.img||'');$('#pcn').hidden=false;scrollTo(0,0)}
+const tog=id=>{const p=DB.prod.find(x=>x.id==id);E('/api/admin/produto',{...p,ativo:p.ativo===false})},rm=id=>{if(confirm('Excluir este produto da loja?'))E('/api/admin/produto/del',{id})};
+$('#pcn').onclick=clr;$('#fp').onsubmit=e=>{e.preventDefault();if(E('/api/admin/produto',{id:$('#pid').value||undefined,nome:$('#pn').value,cat:$('#pc').value,preco:parseFloat($('#pp').value),est:parseInt($('#pe').value),tags:$('#pt').value,img,ativo:$('#pa').checked}))clr()};
+function mclr(){$('#fm').reset();$('#mid').value='';$('#mcn').hidden=true}
+function med(id){const m=DB.mat.find(x=>x.id==id);$('#mid').value=id;$('#mn').value=m.nome;$('#mq').value=m.qtd;$('#mm').value=m.min;$('#mc').value=m.custo;$('#mcn').hidden=false}
+const mrm=id=>{if(confirm('Excluir este material?'))E('/api/admin/mat/del',{id})};
+$('#mcn').onclick=mclr;$('#fm').onsubmit=e=>{e.preventDefault();if(E('/api/admin/mat',{id:$('#mid').value||undefined,nome:$('#mn').value,qtd:parseFloat($('#mq').value),min:parseFloat($('#mm').value),custo:parseFloat($('#mc').value)}))mclr()};
+function R(){$('#cl').innerHTML=[...new Set(DB.prod.map(p=>p.cat))].filter(c=>c!='Sob medida').map(c=>`<option value="${esc(c)}">`).join('');
+$('#tp').innerHTML=DB.prod.filter(p=>p.id!=8).map(p=>`<tr><td>${p.img?`<img class="th" src="${esc(p.img)}" alt="">`:'<div class="th"></div>'}</td><td>${esc(p.nome)}<br><small>${esc(p.cat)}</small></td><td>${brl(p.preco)}</td><td class="${p.est<=5?'lo':''}">${p.est}</td><td>${p.ativo===false?'<span class="lo">Oculto</span>':'<span class="ok">À venda</span>'}</td><td><div class="row"><button onclick="ed(${p.id})">Editar</button><button onclick="tog(${p.id})">${p.ativo===false?'Pôr à venda':'Retirar da venda'}</button><button onclick="rm(${p.id})">Excluir</button></div></td></tr>`).join('');
+$('#tm').innerHTML=DB.mat.map(m=>`<tr><td>${esc(m.nome)}</td><td class="${m.qtd<=m.min?'lo':''}">${m.qtd}</td><td>${m.min}</td><td>${brl(m.custo)}</td><td><div class="row"><button onclick="med(${m.id})">Editar</button><button onclick="mrm(${m.id})">Excluir</button></div></td></tr>`).join('')}R()</script></body></html>

@@ -4,7 +4,7 @@
 <h2>Receitas, gastos e lucro por mês</h2><div class="card"><svg id="ch" viewBox="0 0 640 240" role="img" aria-label="Gráfico mensal de receitas, gastos e lucro"></svg>
 <small><span class="ok">■</span> Receita &nbsp; <span class="lo">■</span> Gasto &nbsp; <b style="color:var(--a)">━</b> Lucro</small></div>
 <h2>Gastos por categoria</h2><div class="card" id="cat"></div>
-<h2>Novo lançamento</h2><form class="card f" id="f"><select id="t"><option value="gasto">Gasto</option><option value="receita">Receita</option></select><input id="c" placeholder="Categoria" required><input id="x" placeholder="Descrição" required><input id="v" type="number" step="0.01" min="0" placeholder="Valor (R$)" required><button class="p">Lançar</button></form>
+<h2>Novo lançamento</h2><form class="card f" id="f"><input type="hidden" id="fid"><input id="d" type="date" aria-label="Data"><select id="t"><option value="gasto">Gasto</option><option value="receita">Receita</option></select><input id="c" placeholder="Categoria" required><input id="x" placeholder="Descrição" required><input id="v" type="number" step="0.01" min="0" placeholder="Valor (R$)" required><button class="p" id="fb">Lançar</button><button type="button" id="fc" hidden>Cancelar edição</button></form>
 <h2>Últimos lançamentos</h2><div class="card w"><table><tbody id="l"></tbody></table></div></main>
 <script>gate();shell('fin');
 function R(){const F=DB.fin,r=F.filter(f=>f.t=='receita').reduce((s,f)=>s+f.v,0),g=F.filter(f=>f.t=='gasto').reduce((s,f)=>s+f.v,0);
@@ -15,5 +15,9 @@ s+=`<rect x="${x0}" y="${H-hr+10}" width="${bw}" height="${hr}" fill="var(--g)"/
 $('#ch').innerHTML=s+`<polyline points="${pts.join(' ')}" fill="none" stroke="var(--a)" stroke-width="3"/>`;
 const C={};F.filter(f=>f.t=='gasto').forEach(f=>C[f.c]=(C[f.c]||0)+f.v);const cm=Math.max(1,...Object.values(C));
 $('#cat').innerHTML=Object.entries(C).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="hb"><span>${esc(k)}</span><i style="width:${v/cm*100}%"></i><span>${brl(v)}</span></div>`).join('');
-$('#l').innerHTML=F.slice().sort((a,b)=>b.d.localeCompare(a.d)).slice(0,10).map(f=>`<tr><td>${f.d}</td><td>${esc(f.x)}<br><small>${esc(f.c)}</small></td><td class="${f.t=='gasto'?'lo':'ok'}">${f.t=='gasto'?'−':'+'}${brl(f.v)}</td></tr>`).join('')}
-$('#f').onsubmit=e=>{e.preventDefault();const r=api('POST','/api/admin/fin',{t:$('#t').value,c:$('#c').value,x:$('#x').value,v:parseFloat($('#v').value)});if(r.s!=200)return alert(r.j.erro||'Erro');e.target.reset();reload();R()};R()</script></body></html>
+$('#l').innerHTML=F.slice().sort((a,b)=>b.d.localeCompare(a.d)||b.id-a.id).slice(0,40).map(f=>`<tr><td>${f.d}</td><td>${esc(f.x)}<br><small>${esc(f.c)}</small></td><td class="${f.t=='gasto'?'lo':'ok'}">${f.t=='gasto'?'−':'+'}${brl(f.v)}</td><td><button onclick="fe(${f.id})">Editar</button> <button onclick="fd(${f.id})">Excluir</button></td></tr>`).join('')}
+function fclr(){$('#f').reset();$('#fid').value='';$('#fb').textContent='Lançar';$('#fc').hidden=true}
+function fe(id){const f=DB.fin.find(x=>x.id==id);$('#fid').value=id;$('#d').value=f.d;$('#t').value=f.t;$('#c').value=f.c;$('#x').value=f.x;$('#v').value=f.v;$('#fb').textContent='Salvar alteração';$('#fc').hidden=false;scrollTo(0,document.querySelector('#f').offsetTop-80)}
+function fd(id){if(!confirm('Excluir este lançamento?'))return;const r=api('POST','/api/admin/fin/del',{id});if(r.s!=200)return alert(r.j.erro||'Erro');reload();R()}
+$('#fc').onclick=fclr;
+$('#f').onsubmit=e=>{e.preventDefault();const b={id:$('#fid').value||undefined,d:$('#d').value||today(),t:$('#t').value,c:$('#c').value,x:$('#x').value,v:parseFloat($('#v').value)},r=api('POST',b.id?'/api/admin/fin/edit':'/api/admin/fin',b);if(r.s!=200)return alert(r.j.erro||'Erro');fclr();reload();R()};$('#d').value=today();R()</script></body></html>

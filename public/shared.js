@@ -11,7 +11,7 @@ let DB;{const r=xhr('GET','/api/pub');DB=r.s==200?r.j:{prod:[],mat:[],ped:[],fin
 const save=()=>{};
 function reload(){const r=api('GET','/api/admin');if(r.s==200)DB=r.j}
 function gate(){let p=sessionStorage.getItem('pin')||prompt('PIN do administrador');const r=xhr('GET','/api/admin',null,p);if(r.s!=200){sessionStorage.removeItem('pin');document.body.innerHTML='<p style="padding:40px;font:16px system-ui">'+esc(r.s==401?'PIN incorreto.':(r.j.erro||'Erro'))+' <a href="index.html">Voltar à loja</a></p>';throw 0}sessionStorage.setItem('pin',p);DB=r.j}
-function shell(a){const L=[['index.html','Loja','loja'],['pedido.html','Fazer pedido','pedido'],['admin.html','Admin','admin'],['financeiro.html','Financeiro','fin']];
+function shell(a){const L=[['index.html','Loja','loja'],['pedido.html','Fazer pedido','pedido'],['admin.html','Admin','admin'],['produtos.html','Produtos','prod'],['financeiro.html','Financeiro','fin']];
 document.head.insertAdjacentHTML('beforeend',`<meta name="viewport" content="width=device-width,initial-scale=1"><style>
 :root{--bg:#120f24;--c:#1e1a38;--t:#f3f0ff;--m:#a79fd0;--b:#352f5c;--a:#22d3ee;--ac:#08121a;--w:#fbbf24;--r:#f472b6;--g:#a3e635;--v:#a78bfa;--c0:#22d3ee;--c1:#f472b6;--c2:#a3e635;--c3:#fbbf24;--c4:#a78bfa}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(900px 500px at 85% -10%,#3b1d6e55,transparent),radial-gradient(700px 400px at -10% 30%,#0e749044,transparent),var(--bg);background-attachment:fixed;color:var(--t);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
