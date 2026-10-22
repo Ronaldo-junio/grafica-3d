@@ -1,5 +1,5 @@
 const http=require('http'),fs=require('fs'),path=require('path'),crypto=require('crypto'),zlib=require('zlib');
-const {TELEGRAPH_TOKEN:TOKEN,DB_SECRET:SECRET,ADMIN_PIN:PIN}=process.env,PORT=process.env.PORT||3000,TITLE='g3d-db',ST=['Novo','Em produção','Pronto','Entregue','Cancelado'];
+const {TELEGRAPH_TOKEN:TOKEN,DB_SECRET:SECRET,ADMIN_PIN:PIN}=process.env,PORT=process.env.PORT||3000,TITLE='g3d-db',ST=['Novo','Em produção','Acabamento','Pronto','Enviado','Entregue','Cancelado'];
 let DB,PAGE,ready=false,fail='';
 const addFin=o=>DB.fin.push({id:Math.max(0,...DB.fin.map(f=>f.id||0))+1,...o});
 const migrate=()=>{let m=Math.max(0,...DB.fin.map(f=>f.id||0));DB.fin.forEach(f=>{if(!f.id)f.id=++m});DB.prod.forEach(p=>{if(p.ativo===undefined)p.ativo=true})};
@@ -67,6 +67,11 @@ async function api(req,res,u,ip){
   else if(p=='/api/admin/estoque'){const o=DB.prod.find(x=>x.id==b.id&&x.id!=8),n=Math.floor(+b.n);if(!o||!(Math.abs(n)<=1000))return J(res,400,{erro:'Dados inválidos'});o.est=Math.max(0,o.est+n)}
   else if(p=='/api/admin/material'){const m=DB.mat.find(x=>x.id==b.id),kg=+b.kg;if(!m||!(kg>0&&kg<=1000))return J(res,400,{erro:'Dados inválidos'});m.qtd=+(m.qtd+kg).toFixed(2);addFin({d:today(),t:'gasto',c:'Material',x:'Reposição '+m.nome,v:+(kg*m.custo).toFixed(2)})}
   else if(p=='/api/admin/fin'){const v=+b.v;if(!['receita','gasto'].includes(b.t)||!str(b.c,60)||!str(b.x,60)||!(v>0&&v<1e8))return J(res,400,{erro:'Dados inválidos'});addFin({d:/^\d{4}-\d{2}-\d{2}$/.test(b.d||'')?b.d:today(),t:b.t,c:str(b.c,60),x:str(b.x,60),v})}
+  else if(p=='/api/admin/pedidos/importar'){const L=str(b.lote,40),A=Array.isArray(b.pedidos)?b.pedidos.slice(0,200):[];DB.imp=DB.imp||[];
+   if(!L||!A.length)return J(res,400,{erro:'Lote vazio'});if(DB.imp.includes(L))return J(res,409,{erro:'Este lote já foi importado.'});
+   const R=A.map(x=>({cli:str(x.cli,80),desc:str(x.desc,200),total:+x.total,st:x.st,prazo:str(x.prazo,10),entrega:str(x.entrega,30)}));
+   if(R.some(x=>!x.cli||!x.desc||!(x.total>=0&&x.total<1e7)||!ST.includes(x.st)||(x.prazo&&!/^\d{4}-\d{2}-\d{2}$/.test(x.prazo))))return J(res,400,{erro:'Há pedidos com dados inválidos.'});
+   let id=Math.max(1000,...DB.ped.map(x=>x.id));R.forEach(x=>DB.ped.push({id:++id,...x,d:today(),...(x.st=='Entregue'?{fin:1}:{})}));DB.imp.push(L)}
   else if(p=='/api/admin/produto'){const o={nome:str(b.nome,80),cat:str(b.cat,30),preco:+b.preco,est:Math.floor(+b.est),tags:str(b.tags,120),img:str(b.img,200),ativo:b.ativo!==false};
    if(!o.nome||!o.cat||!(o.preco>=0&&o.preco<=1e5)||!(o.est>=0&&o.est<=1e5)||(o.img&&!o.img.startsWith('https://telegra.ph/file/')))return J(res,400,{erro:'Dados inválidos'});
    if(b.id){const x=DB.prod.find(y=>y.id==b.id&&y.id!=8);if(!x)return J(res,404,{erro:'Produto não encontrado'});Object.assign(x,o)}else DB.prod.push({id:Math.max(8,...DB.prod.map(y=>y.id))+1,...o})}
