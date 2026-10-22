@@ -1,15 +1,14 @@
 services:
   - type: web
     name: grafica3d
-    runtime: static
-    staticPublishPath: .
-    routes:
-      - type: rewrite
-        source: /pedido
-        destination: /pedido.html
-      - type: rewrite
-        source: /admin
-        destination: /admin.html
-      - type: rewrite
-        source: /financeiro
-        destination: /financeiro.html
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: TELEGRAPH_TOKEN
+        sync: false
+      - key: DB_SECRET
+        sync: false
+      - key: ADMIN_PIN
+        sync: false
