@@ -1,0 +1,19 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gráfica3D · Financeiro</title><script src="shared.js"></script>
+<style>.f{display:flex;gap:8px;flex-wrap:wrap}.f input,.f select{min-width:120px}.hb{display:grid;grid-template-columns:110px 1fr 90px;gap:8px;align-items:center;margin:6px 0}.hb i{display:block;height:14px;background:var(--r);border-radius:3px}svg{width:100%;height:auto}</style></head><body><main>
+<h1>Painel financeiro</h1><div class="k" id="k"></div>
+<h2>Receitas, gastos e lucro por mês</h2><div class="card"><svg id="ch" viewBox="0 0 640 240" role="img" aria-label="Gráfico mensal de receitas, gastos e lucro"></svg>
+<small><span class="ok">■</span> Receita &nbsp; <span class="lo">■</span> Gasto &nbsp; <b style="color:var(--a)">━</b> Lucro</small></div>
+<h2>Gastos por categoria</h2><div class="card" id="cat"></div>
+<h2>Novo lançamento</h2><form class="card f" id="f"><select id="t"><option value="gasto">Gasto</option><option value="receita">Receita</option></select><input id="c" placeholder="Categoria" required><input id="x" placeholder="Descrição" required><input id="v" type="number" step="0.01" min="0" placeholder="Valor (R$)" required><button class="p">Lançar</button></form>
+<h2>Últimos lançamentos</h2><div class="card w"><table><tbody id="l"></tbody></table></div></main>
+<script>gate();shell('fin');
+function R(){const F=DB.fin,r=F.filter(f=>f.t=='receita').reduce((s,f)=>s+f.v,0),g=F.filter(f=>f.t=='gasto').reduce((s,f)=>s+f.v,0);
+$('#k').innerHTML=`<div><small>Receita total</small><b>${brl(r)}</b></div><div><small>Gastos totais</small><b>${brl(g)}</b></div><div><small>Lucro</small><b class="${r-g<0?'lo':'ok'}">${brl(r-g)}</b></div><div><small>Margem</small><b>${r?Math.round((r-g)/r*100):0}%</b></div>`;
+const m={};F.forEach(f=>{const k=f.d.slice(0,7);m[k]=m[k]||{r:0,g:0};m[k][f.t=='receita'?'r':'g']+=f.v});const E=Object.entries(m).sort().slice(-6),mx=Math.max(1,...E.map(([,x])=>Math.max(x.r,x.g))),H=190,W=640/E.length;let s='',pts=[];
+E.forEach(([k,x],i)=>{const bw=W*.28,x0=i*W+W*.17,hr=x.r/mx*H,hg=x.g/mx*H,hl=Math.max(0,(x.r-x.g))/mx*H;
+s+=`<rect x="${x0}" y="${H-hr+10}" width="${bw}" height="${hr}" fill="var(--g)"/><rect x="${x0+bw+4}" y="${H-hg+10}" width="${bw}" height="${hg}" fill="var(--r)"/><text x="${i*W+W/2}" y="228" text-anchor="middle" font-size="12" fill="var(--m)">${k.slice(5)}/${k.slice(2,4)}</text>`;pts.push(`${i*W+W/2},${H-(x.r-x.g)/mx*H+10}`)});
+$('#ch').innerHTML=s+`<polyline points="${pts.join(' ')}" fill="none" stroke="var(--a)" stroke-width="3"/>`;
+const C={};F.filter(f=>f.t=='gasto').forEach(f=>C[f.c]=(C[f.c]||0)+f.v);const cm=Math.max(1,...Object.values(C));
+$('#cat').innerHTML=Object.entries(C).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="hb"><span>${esc(k)}</span><i style="width:${v/cm*100}%"></i><span>${brl(v)}</span></div>`).join('');
+$('#l').innerHTML=F.slice().sort((a,b)=>b.d.localeCompare(a.d)).slice(0,10).map(f=>`<tr><td>${f.d}</td><td>${esc(f.x)}<br><small>${esc(f.c)}</small></td><td class="${f.t=='gasto'?'lo':'ok'}">${f.t=='gasto'?'−':'+'}${brl(f.v)}</td></tr>`).join('')}
+$('#f').onsubmit=e=>{e.preventDefault();DB.fin.push({d:today(),t:$('#t').value,c:$('#c').value,x:$('#x').value,v:parseFloat($('#v').value)});save();e.target.reset();R()};R()</script></body></html>
