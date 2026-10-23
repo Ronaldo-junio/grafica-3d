@@ -8,6 +8,7 @@ const SC={Novo:'#22d3ee','Em produção':'#fbbf24',Acabamento:'#fb923c',Pronto:'
 function xhr(m,u,b,pin){const x=new XMLHttpRequest();x.open(m,u,false);x.setRequestHeader('content-type','application/json');if(pin)x.setRequestHeader('x-pin',pin);try{x.send(b?JSON.stringify(b):null)}catch(e){return{s:0,j:{erro:'Sem conexão com o servidor'}}}let j={};try{j=JSON.parse(x.responseText)}catch(e){}return{s:x.status,j}}
 const api=(m,u,b)=>xhr(m,u,b,sessionStorage.getItem('pin'));
 let DB;{const r=xhr('GET','/api/pub');DB=r.s==200?r.j:{prod:[],mat:[],ped:[],fin:[],erro:(r.j&&r.j.erro)||'Servidor indisponível'}}
+const imgUrl=u=>u&&u.startsWith('tg:')?'/img/'+u.slice(3):(u||'');
 const save=()=>{};
 function reload(){const r=api('GET','/api/admin');if(r.s==200)DB=r.j}
 function gate(){let p=sessionStorage.getItem('pin')||prompt('PIN do administrador');const r=xhr('GET','/api/admin',null,p);if(r.s!=200){sessionStorage.removeItem('pin');document.body.innerHTML='<p style="padding:40px;font:16px system-ui">'+esc(r.s==401?'PIN incorreto.':(r.j.erro||'Erro'))+' <a href="index.html">Voltar à loja</a></p>';throw 0}sessionStorage.setItem('pin',p);DB=r.j}
