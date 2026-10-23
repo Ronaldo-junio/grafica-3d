@@ -51,7 +51,7 @@ async function api(req,res,u,ip){
  if(req.method=='GET'&&p=='/api/orcamento'){const m=DB.mat.find(x=>x.id==u.searchParams.get('mat')),g=Math.min(5000,Math.max(1,+u.searchParams.get('g')||0));return m?J(res,200,{v:quote(m,g)}):J(res,404,{erro:'Material não encontrado'})}
  if(req.method=='POST'&&p=='/api/pedido'){
   if(recent('o'+ip,36e5).length>=20)return J(res,429,{erro:'Muitos pedidos em pouco tempo. Tente mais tarde.'});
-  const b=await rd(req),cli=str(b.cli,80);if(!cli)return J(res,400,{erro:'Informe seu nome.'});
+  const b=await rd(req),cli=str(b.cli,80),tel=String(b.tel||'').replace(/\D/g,'');if(!cli)return J(res,400,{erro:'Informe seu nome.'});if(tel.length<10||tel.length>13)return J(res,400,{erro:'Informe um WhatsApp com DDD, por exemplo 31 99999-8888.'});
   const it=(Array.isArray(b.itens)?b.itens:[]).slice(0,20),cu=(Array.isArray(b.custom)?b.custom:[]).slice(0,10);if(!it.length&&!cu.length)return J(res,400,{erro:'Pedido vazio.'});
   let total=0;const ds=[],need={},mneed={};
   for(const x of it){const pr=DB.prod.find(y=>y.id==x.id&&y.id!=8&&y.ativo!==false),q=Math.floor(+x.q);if(!pr||!(q>=1&&q<=999))return J(res,400,{erro:'Item inválido.'});need[pr.id]=(need[pr.id]||0)+q;total+=pr.preco*q;ds.push(q+'x '+pr.nome)}
@@ -59,7 +59,7 @@ async function api(req,res,u,ip){
   for(const id in need){const pr=DB.prod.find(y=>y.id==id);if(need[id]>pr.est)return J(res,409,{erro:'Temos só '+pr.est+' de “'+pr.nome+'” em estoque.'})}
   for(const id in need)DB.prod.find(y=>y.id==id).est-=need[id];
   for(const id in mneed){const m=DB.mat.find(y=>y.id==id);m.qtd=Math.max(0,+(m.qtd-mneed[id]).toFixed(3))}
-  const id=Math.max(1000,...DB.ped.map(x=>x.id))+1;DB.ped.push({id,cli,desc:ds.join('; '),total:+total.toFixed(2),st:'Novo',d:today()});mark('o'+ip);
+  const id=Math.max(1000,...DB.ped.map(x=>x.id))+1;DB.ped.push({id,cli,tel,desc:ds.join('; '),total:+total.toFixed(2),st:'Novo',d:today(),pago:false});mark('o'+ip);
   return J(res,200,{id,total:+total.toFixed(2)})}
  if(p.startsWith('/api/admin')){
   if(!PIN)return J(res,503,{erro:'Defina a variável ADMIN_PIN no Render.'});
@@ -78,6 +78,8 @@ async function api(req,res,u,ip){
    const R=A.map(x=>({cli:str(x.cli,80),desc:str(x.desc,200),total:+x.total,st:x.st,prazo:str(x.prazo,10),entrega:str(x.entrega,30)}));
    if(R.some(x=>!x.cli||!x.desc||!(x.total>=0&&x.total<1e7)||!ST.includes(x.st)||(x.prazo&&!/^\d{4}-\d{2}-\d{2}$/.test(x.prazo))))return J(res,400,{erro:'Há pedidos com dados inválidos.'});
    let id=Math.max(1000,...DB.ped.map(x=>x.id));R.forEach(x=>DB.ped.push({id:++id,...x,d:today(),...(x.st=='Entregue'?{fin:1}:{})}));DB.imp.push(L)}
+  else if(p=='/api/admin/pedido'){const o=DB.ped.find(x=>x.id==b.id);if(!o)return J(res,404,{erro:'Pedido não encontrado'});
+   if(b.total!==undefined){const t=+b.total;if(!(t>=0&&t<1e7))return J(res,400,{erro:'Valor inválido'});o.total=+t.toFixed(2)}if(b.pago!==undefined)o.pago=!!b.pago}
   else if(p=='/api/admin/produto'){const o={nome:str(b.nome,80),cat:str(b.cat,30),preco:+b.preco,est:Math.floor(+b.est),tags:str(b.tags,120),img:str(b.img,200),ativo:b.ativo!==false};
    if(!o.nome||!o.cat||!(o.preco>=0&&o.preco<=1e5)||!(o.est>=0&&o.est<=1e5)||(o.img&&!/^tg:[A-Za-z0-9_-]{20,200}$/.test(o.img)))return J(res,400,{erro:'Dados inválidos'});
    if(b.id){const x=DB.prod.find(y=>y.id==b.id&&y.id!=8);if(!x)return J(res,404,{erro:'Produto não encontrado'});Object.assign(x,o)}else DB.prod.push({id:Math.max(8,...DB.prod.map(y=>y.id))+1,...o})}
