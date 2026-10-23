@@ -32,12 +32,18 @@ const str=(v,n)=>String(v==null?'':v).trim().slice(0,n);
 const quote=(m,g)=>Math.round((g/1000*m.custo*2.5+15)*100)/100;
 const pub=()=>({prod:DB.prod.filter(p=>p.ativo!==false),mat:DB.mat.map(({id,nome})=>({id,nome})),ped:[],fin:[]});
 const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8'},PAGES={'/':'index.html','/index.html':'index.html','/pedido':'pedido.html','/produtos':'produtos.html','/produtos.html':'produtos.html','/pedido.html':'pedido.html','/admin':'admin.html','/admin.html':'admin.html','/financeiro':'financeiro.html','/financeiro.html':'financeiro.html','/shared.js':'shared.js'};
+const TGT=process.env.TG_BOT_TOKEN,TGC=process.env.TG_CHAT_ID,fpath=new Map();
 async function foto(req,res){const b=await rd(req,3e6),m=/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(b.img||''));if(!m)return J(res,400,{erro:'Envie uma imagem JPEG.'});
+ if(!TGT||!TGC)return J(res,503,{erro:'Configure TG_BOT_TOKEN e TG_CHAT_ID no Render para enviar fotos.'});
  const buf=Buffer.from(m[1],'base64');if(buf.length>2e6)return J(res,400,{erro:'Imagem grande demais.'});
- const fd=new FormData();fd.append('file',new Blob([buf],{type:'image/jpeg'}),'foto.jpg');
- const r=await fetch('https://telegra.ph/upload',{method:'POST',body:fd}),j=await r.json().catch(()=>null);
- if(!Array.isArray(j)||!j[0]||!j[0].src)return J(res,502,{erro:'O Telegraph recusou a imagem: '+JSON.stringify(j).slice(0,120)});
- return J(res,200,{url:'https://telegra.ph'+j[0].src})}
+ const fd=new FormData();fd.append('chat_id',TGC);fd.append('disable_notification','true');fd.append('photo',new Blob([buf],{type:'image/jpeg'}),'foto.jpg');
+ const j=await fetch('https://api.telegram.org/bot'+TGT+'/sendPhoto',{method:'POST',body:fd}).then(r=>r.json()).catch(()=>null);
+ if(!j||!j.ok)return J(res,502,{erro:'O Telegram recusou a imagem: '+String(j&&j.description||'sem resposta').slice(0,120)});
+ const ph=j.result.photo;return J(res,200,{id:'tg:'+ph[ph.length-1].file_id})}
+async function img(res,id){if(!TGT||!/^[A-Za-z0-9_-]{20,200}$/.test(id)){res.writeHead(404);return res.end()}
+ let c=fpath.get(id);if(!c||c.t<Date.now()){const r=await fetch('https://api.telegram.org/bot'+TGT+'/getFile?file_id='+id).then(x=>x.json()).catch(()=>null);if(!r||!r.ok){res.writeHead(404);return res.end()}c={p:r.result.file_path,t:Date.now()+3e6};fpath.set(id,c)}
+ const f=await fetch('https://api.telegram.org/file/bot'+TGT+'/'+c.p);if(!f.ok){fpath.delete(id);res.writeHead(502);return res.end()}
+ res.writeHead(200,{'content-type':'image/jpeg','cache-control':'public,max-age=86400'});res.end(Buffer.from(await f.arrayBuffer()))}
 async function api(req,res,u,ip){
  if(!ready)return J(res,503,{erro:fail||'Servidor iniciando, tente de novo em instantes'});
  const p=u.pathname;
@@ -73,7 +79,7 @@ async function api(req,res,u,ip){
    if(R.some(x=>!x.cli||!x.desc||!(x.total>=0&&x.total<1e7)||!ST.includes(x.st)||(x.prazo&&!/^\d{4}-\d{2}-\d{2}$/.test(x.prazo))))return J(res,400,{erro:'Há pedidos com dados inválidos.'});
    let id=Math.max(1000,...DB.ped.map(x=>x.id));R.forEach(x=>DB.ped.push({id:++id,...x,d:today(),...(x.st=='Entregue'?{fin:1}:{})}));DB.imp.push(L)}
   else if(p=='/api/admin/produto'){const o={nome:str(b.nome,80),cat:str(b.cat,30),preco:+b.preco,est:Math.floor(+b.est),tags:str(b.tags,120),img:str(b.img,200),ativo:b.ativo!==false};
-   if(!o.nome||!o.cat||!(o.preco>=0&&o.preco<=1e5)||!(o.est>=0&&o.est<=1e5)||(o.img&&!o.img.startsWith('https://telegra.ph/file/')))return J(res,400,{erro:'Dados inválidos'});
+   if(!o.nome||!o.cat||!(o.preco>=0&&o.preco<=1e5)||!(o.est>=0&&o.est<=1e5)||(o.img&&!/^tg:[A-Za-z0-9_-]{20,200}$/.test(o.img)))return J(res,400,{erro:'Dados inválidos'});
    if(b.id){const x=DB.prod.find(y=>y.id==b.id&&y.id!=8);if(!x)return J(res,404,{erro:'Produto não encontrado'});Object.assign(x,o)}else DB.prod.push({id:Math.max(8,...DB.prod.map(y=>y.id))+1,...o})}
   else if(p=='/api/admin/produto/del'){const i=DB.prod.findIndex(y=>y.id==b.id&&y.id!=8);if(i<0)return J(res,404,{erro:'Produto não encontrado'});DB.prod.splice(i,1)}
   else if(p=='/api/admin/mat'){const o={nome:str(b.nome,40),qtd:+b.qtd,min:+b.min,custo:+b.custo};if(!o.nome||!(o.qtd>=0&&o.qtd<=1e5)||!(o.min>=0&&o.min<=1e5)||!(o.custo>=0&&o.custo<=1e5))return J(res,400,{erro:'Dados inválidos'});
@@ -86,6 +92,7 @@ async function api(req,res,u,ip){
  J(res,404,{erro:'Não encontrado'})}
 const srv=http.createServer(async(req,res)=>{try{const u=new URL(req.url,'http://x'),ip=String(req.headers['x-forwarded-for']||req.socket.remoteAddress).split(',')[0].trim();
  if(u.pathname.startsWith('/api/')){const snap=JSON.stringify(DB);try{await api(req,res,u,ip);if(req.method=='POST'&&res.statusCode==200&&JSON.stringify(DB)!=snap)await persist()}catch(e){if(!res.headersSent)J(res,e===0?400:502,{erro:e===0?'Requisição inválida':'Não foi possível salvar no banco (Telegraph): '+e.message});if(e!==0&&snap)DB=JSON.parse(snap)}return}
+ if(u.pathname.startsWith('/img/'))return await img(res,u.pathname.slice(5));
  const f=PAGES[u.pathname];if(!f){res.writeHead(404);return res.end('Não encontrado')}
  res.writeHead(200,{'content-type':MIME[path.extname(f)],'cache-control':'no-cache'});fs.createReadStream(path.join(__dirname,'public',f)).pipe(res)}catch(e){if(!res.headersSent)res.writeHead(500);res.end()}});
 srv.listen(PORT,()=>console.log('Gráfica3D na porta '+PORT));
