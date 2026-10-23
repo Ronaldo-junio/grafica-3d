@@ -4,6 +4,7 @@ let DB,PAGE,ready=false,fail='';
 const addFin=o=>DB.fin.push({id:Math.max(0,...DB.fin.map(f=>f.id||0))+1,...o});
 const migrate=()=>{let m=Math.max(0,...DB.fin.map(f=>f.id||0));DB.fin.forEach(f=>{if(!f.id)f.id=++m});DB.prod.forEach(p=>{if(p.ativo===undefined)p.ativo=true});
  DB.ped.forEach(o=>{if(o.pago===undefined)o.pago=false;delete o.fin});
+ DB.seq=Math.max(DB.seq||0,...DB.ped.map(o=>o.id));
  DB.fin.forEach(f=>{const r=!f.pid&&f.t=='receita'&&/^Pedido #(\d+)$/.exec(f.x||'');if(r){const o=DB.ped.find(p=>p.id==+r[1]);if(o){o.pago=true;f.pid=o.id;f.x=(o.cli+' — '+o.desc).slice(0,160)}}})};
 const sync=o=>{const i=DB.fin.findIndex(f=>f.pid==o.id);if(o.pago&&o.total>0){if(i<0)addFin({d:today(),t:'receita',c:'Vendas',x:(o.cli+' — '+o.desc).slice(0,160),v:o.total,pid:o.id});else DB.fin[i].v=o.total}else if(i>=0)DB.fin.splice(i,1)};
 function notify(o){if(!TGT||!TGC)return;const url=process.env.RENDER_EXTERNAL_URL;
@@ -65,7 +66,7 @@ async function api(req,res,u,ip){
   for(const id in need){const pr=DB.prod.find(y=>y.id==id);if(need[id]>pr.est)return J(res,409,{erro:'Temos só '+pr.est+' de “'+pr.nome+'” em estoque.'})}
   for(const id in need)DB.prod.find(y=>y.id==id).est-=need[id];
   for(const id in mneed){const m=DB.mat.find(y=>y.id==id);m.qtd=Math.max(0,+(m.qtd-mneed[id]).toFixed(3))}
-  const id=Math.max(1000,...DB.ped.map(x=>x.id))+1;const np={id,cli,tel,desc:ds.join('; '),total:+total.toFixed(2),st:'Novo',d:today(),pago:false};DB.ped.push(np);res.novoPedido=np;mark('o'+ip);
+  const id=Math.max(1000,DB.seq||0,...DB.ped.map(x=>x.id))+1;DB.seq=id;const np={id,cli,tel,desc:ds.join('; '),total:+total.toFixed(2),st:'Novo',d:today(),pago:false};DB.ped.push(np);res.novoPedido=np;mark('o'+ip);
   return J(res,200,{id,total:+total.toFixed(2)})}
  if(p.startsWith('/api/admin')){
   if(!PIN)return J(res,503,{erro:'Defina a variável ADMIN_PIN no Render.'});
@@ -83,9 +84,12 @@ async function api(req,res,u,ip){
    if(!L||!A.length)return J(res,400,{erro:'Lote vazio'});if(DB.imp.includes(L))return J(res,409,{erro:'Este lote já foi importado.'});
    const R=A.map(x=>({cli:str(x.cli,80),desc:str(x.desc,200),total:+x.total,st:x.st,prazo:str(x.prazo,10),entrega:str(x.entrega,30)}));
    if(R.some(x=>!x.cli||!x.desc||!(x.total>=0&&x.total<1e7)||!ST.includes(x.st)||(x.prazo&&!/^\d{4}-\d{2}-\d{2}$/.test(x.prazo))))return J(res,400,{erro:'Há pedidos com dados inválidos.'});
-   let id=Math.max(1000,...DB.ped.map(x=>x.id));R.forEach(x=>DB.ped.push({id:++id,...x,d:today()}));DB.imp.push(L)}
+   let id=Math.max(1000,DB.seq||0,...DB.ped.map(x=>x.id));R.forEach(x=>DB.ped.push({id:++id,...x,d:today()}));DB.seq=id;DB.imp.push(L)}
   else if(p=='/api/admin/pedido'){const o=DB.ped.find(x=>x.id==b.id);if(!o)return J(res,404,{erro:'Pedido não encontrado'});
    if(b.total!==undefined){const t=+b.total;if(!(t>=0&&t<1e7))return J(res,400,{erro:'Valor inválido'});o.total=+t.toFixed(2)}if(b.pago!==undefined)o.pago=!!b.pago;sync(o)}
+  else if(p=='/api/admin/pedido/del'){const l=b.todos?DB.ped.filter(o=>o.st=='Cancelado'&&!o.pago):DB.ped.filter(o=>o.id==b.id);
+   if(!b.todos){const o=l[0];if(!o)return J(res,404,{erro:'Pedido não encontrado'});if(o.st!='Cancelado')return J(res,409,{erro:'Só pedidos cancelados podem ser excluídos.'});if(o.pago)return J(res,409,{erro:'Este pedido está marcado como pago. Desmarque o Pago antes de excluir.'})}
+   const ids=new Set(l.map(o=>o.id));DB.ped=DB.ped.filter(o=>!ids.has(o.id));DB.fin=DB.fin.filter(f=>!ids.has(f.pid))}
   else if(p=='/api/admin/produto'){const o={nome:str(b.nome,80),cat:str(b.cat,30),preco:+b.preco,est:Math.floor(+b.est),tags:str(b.tags,120),img:str(b.img,200),ativo:b.ativo!==false};
    if(!o.nome||!o.cat||!(o.preco>=0&&o.preco<=1e5)||!(o.est>=0&&o.est<=1e5)||(o.img&&!/^tg:[A-Za-z0-9_-]{20,200}$/.test(o.img)))return J(res,400,{erro:'Dados inválidos'});
    if(b.id){const x=DB.prod.find(y=>y.id==b.id&&y.id!=8);if(!x)return J(res,404,{erro:'Produto não encontrado'});Object.assign(x,o)}else DB.prod.push({id:Math.max(8,...DB.prod.map(y=>y.id))+1,...o})}
