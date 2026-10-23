@@ -5,7 +5,7 @@ form{display:flex;gap:8px}form input{flex:1;font-size:16px}</style></head><body>
 <div class="card" style="padding:0"><div id="ms" aria-live="polite"></div></div><div id="sg"></div>
 <form id="f"><input id="i" autocomplete="off" placeholder="Ex.: quero 2 chaveiros, um vazo, peça personalizada…" aria-label="Mensagem"><button class="p">Enviar</button></form></main>
 <script>shell('pedido');const N={um:1,uma:1,dois:2,duas:2,tres:3,quatro:4,cinco:5,seis:6,dez:10};
-let S='start',cart=[],cur=null,cust=null,total=0,nome='';
+let S='start',cart=[],cur=null,cust=null,total=0,nome='',tel='';
 const say=(t,w='bot')=>{$('#ms').insertAdjacentHTML('beforeend',`<div class="m ${w}">${esc(t)}</div>`);$('#ms').scrollTop=1e9};
 const num=t=>{const m=norm(t).match(/\d+([.,]\d+)?/);if(m)return parseFloat(m[0].replace(',','.'));for(const w of norm(t).split(' '))if(N[w])return N[w];return null};
 const fp=q=>DB.prod.map(p=>({p,s:score(q,p.nome+' '+p.cat+' '+p.tags)})).filter(x=>x.s>=.5).sort((a,b)=>b.s-a.s).map(x=>x.p);
@@ -25,9 +25,10 @@ else if(S=='qty'){const q=num(t);if(q&&q>0)addItem(cur,Math.round(q));else say('
 else if(S=='mat'){const l=fm(t);if(!l.length){say('Não reconheci o material. Opções: '+DB.mat.map(m=>m.nome).join(', ')+'.');return}cust.m=l[0];S='desc';say(`Ótimo, ${l[0].nome}. Descreva a peça (pode colar o link do arquivo STL).`)}
 else if(S=='desc'){cust.d=t;S='peso';say('Qual o peso aproximado em gramas? Se não souber, chute: calculamos o orçamento e confirmamos depois.')}
 else if(S=='peso'){const g=Math.min(5000,Math.max(1,num(t)||100)),v=api('GET','/api/orcamento?mat='+cust.m.id+'&g='+g).j.v||0;cart.push({p:DB.prod.find(p=>p.id==8),q:1,c:{...cust,g,v}});total+=v;S='more';say(`Orçamento estimado da peça: ${brl(v)}. Quer mais alguma coisa? (diga o que ou “só isso”)`)}
-else if(S=='nome'){nome=t.trim();const r=cart.map(i=>i.c?`Sob medida: ${i.c.d} (${i.c.m.nome}, ${i.c.g}g) ${brl(i.c.v)}`:`${i.q}x ${i.p.nome}`).join('\n');S='conf';say(`Resumo, ${nome}:\n${r}\nTotal: ${brl(total)}\nConfirma o pedido?`)}
-else if(S=='conf'){if(yes(t)&&!no(t)){const r=api('POST','/api/pedido',{cli:nome,itens:cart.filter(i=>!i.c).map(i=>({id:i.p.id,q:i.q})),custom:cart.filter(i=>i.c).map(i=>({mat:i.c.m.id,desc:i.c.d,g:i.c.g}))});
-if(r.s==200){S='fim';say(`Pedido #${r.j.id} registrado! Total ${brl(r.j.total)}. Entraremos em contato para combinar pagamento e entrega. Para outro pedido, recarregue a página.`)}else say((r.j.erro||'Não consegui registrar agora.')+' Tente de novo ou diga o que ajustar.')}
+else if(S=='nome'){nome=t.trim();S='tel';say(`Obrigado, ${nome}! Qual o seu WhatsApp com DDD? Usamos para combinar a entrega e o pagamento.`)}
+else if(S=='tel'){const dg=t.replace(/\D/g,'');if(dg.length<10||dg.length>13){say('Não consegui entender o número. Envie com DDD, por exemplo 31 99999-8888.');return}tel=dg;const r=cart.map(i=>i.c?`Sob medida: ${i.c.d} (${i.c.m.nome}, ${i.c.g}g) ${brl(i.c.v)}`:`${i.q}x ${i.p.nome}`).join('\n');S='conf';say(`Resumo, ${nome}:\n${r}\nTotal: ${brl(total)}\nConfirma o pedido?`)}
+else if(S=='conf'){if(yes(t)&&!no(t)){const r=api('POST','/api/pedido',{cli:nome,tel,itens:cart.filter(i=>!i.c).map(i=>({id:i.p.id,q:i.q})),custom:cart.filter(i=>i.c).map(i=>({mat:i.c.m.id,desc:i.c.d,g:i.c.g}))});
+if(r.s==200){S='fim';say(`Pedido #${r.j.id} registrado! Total ${brl(r.j.total)}. Entraremos em contato pelo WhatsApp para combinar o pagamento e a entrega. Para outro pedido, recarregue a página.`)}else say((r.j.erro||'Não consegui registrar agora.')+' Tente de novo ou diga o que ajustar.')}
 else{cart=[];total=0;S='start';say('Sem problemas, cancelei. O que você gostaria de pedir?')}}
 else say('Seu pedido já foi registrado. Recarregue a página para fazer outro.')}
 $('#f').onsubmit=e=>{e.preventDefault();const t=$('#i').value.trim();if(!t)return;$('#i').value='';say(t,'me');$('#sg').innerHTML='';step(t)};
