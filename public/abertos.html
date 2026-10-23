@@ -1,0 +1,14 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Gráfica3D · Em aberto</title><script src="shared.js"></script>
+<style>.ls{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}.oc{display:flex;flex-direction:column;gap:6px}.oc h3{margin:0;font-size:16px}.oc .t{display:flex;justify-content:space-between;gap:8px;align-items:center}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.pr{font-size:20px;font-weight:700}</style></head><body><main>
+<h1>Pedidos em aberto</h1><div class="row" style="margin-bottom:12px"><span id="ct"></span><button id="nt" hidden>🔔 Ativar avisos neste aparelho</button></div><div class="ls" id="ls"></div></main>
+<script>gate();shell('ab');
+const AB=p=>!['Entregue','Cancelado'].includes(p.st),E=(u,b)=>{const r=api('POST',u,b);if(r.s!=200)alert(r.j.erro||'Erro');reload();R()};
+const setSt=(id,v)=>E('/api/admin/status',{id,st:v}),pg=(id,v)=>E('/api/admin/pedido',{id,pago:v});
+function vl(id){const p=DB.ped.find(x=>x.id==id),v=parseFloat((prompt('Novo valor do pedido (R$):',p.total)||'').replace(',','.'));if(v>=0)E('/api/admin/pedido',{id,total:v})}
+function R(){const o=DB.ped.filter(AB).sort((a,b)=>(a.prazo||'9999').localeCompare(b.prazo||'9999')||b.id-a.id);
+$('#ct').textContent=o.length+' em aberto · a receber '+brl(DB.ped.filter(p=>!p.pago&&p.st!='Cancelado').reduce((s,p)=>s+p.total,0));
+$('#ls').innerHTML=o.length?o.map(p=>`<div class="card oc"><div class="t"><h3>#${p.id} · ${esc(p.cli)}</h3><select style="border:2px solid ${SC[p.st]}" onchange="setSt(${p.id},this.value)" aria-label="Status do pedido ${p.id}">${ST.map(s=>`<option${s==p.st?' selected':''}>${s}</option>`).join('')}</select></div>
+<div>${esc(p.desc)}</div><small>${p.tel?`<a href="https://wa.me/${p.tel.length<=11?'55'+p.tel:p.tel}" target="_blank" rel="noopener">WhatsApp ${esc(p.tel)}</a> · `:''}${p.prazo?'prazo '+p.prazo.split('-').reverse().join('/')+(p.prazo<today()?' <span class="lo">atrasado</span>':''):'sem prazo'}</small>
+<div class="row"><span class="pr">${brl(p.total)}</span><label title="Só pedidos pagos entram no financeiro" style="display:flex;gap:4px;align-items:center"><input type="checkbox" ${p.pago?'checked':''} onchange="pg(${p.id},this.checked)" style="width:auto"> Pago</label><button onclick="vl(${p.id})">Valor</button></div></div>`).join(''):'<div class="card">Nenhum pedido em aberto 🎉</div>';document.title=document.title.replace(/^🔔 /,'')}
+const nt=$('#nt');if('Notification' in window&&Notification.permission=='default'){nt.hidden=false;nt.onclick=()=>Notification.requestPermission().then(()=>nt.hidden=true)}
+R();watchOrders(R)</script></body></html>
