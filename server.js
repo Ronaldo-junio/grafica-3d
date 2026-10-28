@@ -3,13 +3,22 @@ const {TELEGRAPH_TOKEN:TOKEN,DB_SECRET:SECRET,ADMIN_PIN:PIN}=process.env,PORT=pr
 let DB,PAGE,ready=false,fail='';
 const addFin=o=>DB.fin.push({id:Math.max(0,...DB.fin.map(f=>f.id||0))+1,...o});
 const migrate=()=>{let m=Math.max(0,...DB.fin.map(f=>f.id||0));DB.fin.forEach(f=>{if(!f.id)f.id=++m});DB.prod.forEach(p=>{if(p.ativo===undefined)p.ativo=true});
- DB.ped.forEach(o=>{if(o.pago===undefined)o.pago=false;delete o.fin});
+ DB.ped.forEach(o=>{if(o.pago===undefined)o.pago=false;delete o.fin});delete DB.dev;DB.users=DB.users||{};
  DB.seq=Math.max(DB.seq||0,...DB.ped.map(o=>o.id));
  DB.fin.forEach(f=>{const r=!f.pid&&f.t=='receita'&&/^Pedido #(\d+)$/.exec(f.x||'');if(r){const o=DB.ped.find(p=>p.id==+r[1]);if(o){o.pago=true;f.pid=o.id;f.x=(o.cli+' — '+o.desc).slice(0,160)}}})};
 const sync=o=>{const i=DB.fin.findIndex(f=>f.pid==o.id);if(o.pago&&o.total>0){if(i<0)addFin({d:today(),t:'receita',c:'Vendas',x:(o.cli+' — '+o.desc).slice(0,160),v:o.total,pid:o.id});else DB.fin[i].v=o.total}else if(i>=0)DB.fin.splice(i,1)};
 function notify(o){if(!TGT||!TGC)return;const url=process.env.RENDER_EXTERNAL_URL;
  const t='🆕 Novo pedido #'+o.id+'\nCliente: '+o.cli+'\nWhatsApp: '+o.tel+'\n'+o.desc+'\nTotal: R$ '+o.total.toFixed(2).replace('.',',')+(url?'\n'+url+'/abertos.html':'');
  fetch('https://api.telegram.org/bot'+TGT+'/sendMessage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:TGC,text:t})}).catch(()=>{})}
+const TKEY=crypto.createHmac('sha256',SECRET||'sem-segredo').update('tokens-v1').digest();
+const b64=s=>Buffer.from(s).toString('base64url'),sig=s=>crypto.createHmac('sha256',TKEY).update(s).digest('base64url');
+const mkTok=(kind,sub,days,extra)=>{const p=b64([kind,sub,Date.now()+days*864e5,extra||''].join('|'));return p+'.'+sig(p)};
+const vfTok=(t,kind)=>{const [p,s]=String(t||'').split('.');if(!p||!s)return null;const a=Buffer.from(sig(p)),b=Buffer.from(s);if(a.length!=b.length||!crypto.timingSafeEqual(a,b))return null;const [k,sub,exp,extra]=Buffer.from(p,'base64url').toString().split('|');return k==kind&&+exp>Date.now()?{sub,extra}:null};
+const pinTag=()=>PIN?crypto.createHash('sha256').update(String(PIN)).digest('hex').slice(0,8):'';
+const normTel=t=>{let d=String(t||'').replace(/\D/g,'');if(d.length>=12&&d.startsWith('55'))d=d.slice(2);return d},okTel=d=>d.length>=10&&d.length<=11;
+const hashPw=(s,salt)=>crypto.scryptSync(s,salt,32).toString('hex');
+const userOf=req=>{const t=vfTok(req.headers['x-token'],'c');if(!t)return null;const u=(DB.users||{})[t.sub];return u&&u.hash.slice(0,6)==t.extra?{tel:t.sub,...u}:null};
+const adminView=()=>({...DB,users:undefined,clientes:Object.entries(DB.users||{}).map(([tel,u])=>({tel,nome:u.nome,criado:u.criado}))});
 const today=()=>new Date().toISOString().slice(0,10);
 function seed(){const fin=[];[[5,3100,1900],[6,3600,2100],[7,3900,2300],[8,4400,2500],[9,4900,2600]].forEach(([m,r,g])=>{const d='2026-0'+m+'-15';fin.push({d,t:'receita',c:'Vendas',x:'Vendas do mês',v:r},{d,t:'gasto',c:'Material',x:'Filamentos e resina',v:Math.round(g*.6)},{d,t:'gasto',c:'Energia',x:'Energia e internet',v:Math.round(g*.25)},{d,t:'gasto',c:'Manutenção',x:'Peças e bicos',v:Math.round(g*.15)})});
 fin.push({d:'2026-10-10',t:'receita',c:'Vendas',x:'Vendas do mês',v:2380},{d:'2026-10-10',t:'gasto',c:'Material',x:'Filamentos e resina',v:1300},{d:'2026-10-10',t:'gasto',c:'Energia',x:'Energia e internet',v:540});
@@ -38,7 +47,7 @@ const h=s=>crypto.createHash('sha256').update(String(s)).digest();
 const str=(v,n)=>String(v==null?'':v).trim().slice(0,n);
 const quote=(m,g)=>Math.round((g/1000*m.custo*2.5+15)*100)/100;
 const pub=()=>({prod:DB.prod.filter(p=>p.ativo!==false),mat:DB.mat.map(({id,nome})=>({id,nome})),ped:[],fin:[]});
-const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.webmanifest':'application/manifest+json','.png':'image/png'},PAGES={'/':'index.html','/index.html':'index.html','/pedido':'pedido.html','/abertos':'abertos.html','/abertos.html':'abertos.html','/produtos':'produtos.html','/produtos.html':'produtos.html','/pedido.html':'pedido.html','/admin':'admin.html','/admin.html':'admin.html','/financeiro':'financeiro.html','/financeiro.html':'financeiro.html','/shared.js':'shared.js','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/icon-192.png':'icon-192.png','/icon-512.png':'icon-512.png','/icon-maskable.png':'icon-maskable.png'};
+const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.webmanifest':'application/manifest+json','.png':'image/png'},PAGES={'/':'index.html','/index.html':'index.html','/pedido':'pedido.html','/conta':'conta.html','/conta.html':'conta.html','/abertos':'abertos.html','/abertos.html':'abertos.html','/produtos':'produtos.html','/produtos.html':'produtos.html','/pedido.html':'pedido.html','/admin':'admin.html','/admin.html':'admin.html','/financeiro':'financeiro.html','/financeiro.html':'financeiro.html','/shared.js':'shared.js','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/icon-192.png':'icon-192.png','/icon-512.png':'icon-512.png','/icon-maskable.png':'icon-maskable.png'};
 const TGT=process.env.TG_BOT_TOKEN,TGC=process.env.TG_CHAT_ID,fpath=new Map();
 async function foto(req,res){const b=await rd(req,3e6),m=/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(b.img||''));if(!m)return J(res,400,{erro:'Envie uma imagem JPEG.'});
  if(!TGT||!TGC)return J(res,503,{erro:'Configure TG_BOT_TOKEN e TG_CHAT_ID no Render para enviar fotos.'});
@@ -58,7 +67,7 @@ async function api(req,res,u,ip){
  if(req.method=='GET'&&p=='/api/orcamento'){const m=DB.mat.find(x=>x.id==u.searchParams.get('mat')),g=Math.min(5000,Math.max(1,+u.searchParams.get('g')||0));return m?J(res,200,{v:quote(m,g)}):J(res,404,{erro:'Material não encontrado'})}
  if(req.method=='POST'&&p=='/api/pedido'){
   if(recent('o'+ip,36e5).length>=20)return J(res,429,{erro:'Muitos pedidos em pouco tempo. Tente mais tarde.'});
-  const b=await rd(req),cli=str(b.cli,80),tel=String(b.tel||'').replace(/\D/g,'');if(!cli)return J(res,400,{erro:'Informe seu nome.'});if(tel.length<10||tel.length>13)return J(res,400,{erro:'Informe um WhatsApp com DDD, por exemplo 31 99999-8888.'});
+  const b=await rd(req),us=userOf(req),cli=us?us.nome:str(b.cli,80),tel=us?us.tel:String(b.tel||'').replace(/\D/g,'');if(!cli)return J(res,400,{erro:'Informe seu nome.'});if(tel.length<10||tel.length>13)return J(res,400,{erro:'Informe um WhatsApp com DDD, por exemplo 31 99999-8888.'});
   const it=(Array.isArray(b.itens)?b.itens:[]).slice(0,20),cu=(Array.isArray(b.custom)?b.custom:[]).slice(0,10);if(!it.length&&!cu.length)return J(res,400,{erro:'Pedido vazio.'});
   let total=0;const ds=[],need={},mneed={};
   for(const x of it){const pr=DB.prod.find(y=>y.id==x.id&&y.id!=8&&y.ativo!==false),q=Math.floor(+x.q);if(!pr||!(q>=1&&q<=999))return J(res,400,{erro:'Item inválido.'});need[pr.id]=(need[pr.id]||0)+q;total+=pr.preco*q;ds.push(q+'x '+pr.nome)}
@@ -66,13 +75,26 @@ async function api(req,res,u,ip){
   for(const id in need){const pr=DB.prod.find(y=>y.id==id);if(need[id]>pr.est)return J(res,409,{erro:'Temos só '+pr.est+' de “'+pr.nome+'” em estoque.'})}
   for(const id in need)DB.prod.find(y=>y.id==id).est-=need[id];
   for(const id in mneed){const m=DB.mat.find(y=>y.id==id);m.qtd=Math.max(0,+(m.qtd-mneed[id]).toFixed(3))}
-  const id=Math.max(1000,DB.seq||0,...DB.ped.map(x=>x.id))+1;DB.seq=id;const np={id,cli,tel,desc:ds.join('; '),total:+total.toFixed(2),st:'Novo',d:today(),pago:false};DB.ped.push(np);res.novoPedido=np;mark('o'+ip);
+  const id=Math.max(1000,DB.seq||0,...DB.ped.map(x=>x.id))+1;DB.seq=id;const np={id,cli,tel,desc:ds.join('; '),total:+total.toFixed(2),st:'Novo',d:today(),pago:false,...(us?{conta:us.tel}:{})};DB.ped.push(np);res.novoPedido=np;mark('o'+ip);
   return J(res,200,{id,total:+total.toFixed(2)})}
+  if(req.method=='POST'&&p=='/api/conta/registrar'){if(recent('r'+ip,36e5).length>=8)return J(res,429,{erro:'Muitas tentativas. Tente mais tarde.'});const b=await rd(req),nome=str(b.nome,60),tel=normTel(b.tel),senha=String(b.senha||'');
+   if(!nome)return J(res,400,{erro:'Informe seu nome.'});if(!okTel(tel))return J(res,400,{erro:'Informe o WhatsApp com DDD, por exemplo 31 99999-8888.'});if(senha.length<6||senha.length>64)return J(res,400,{erro:'A senha precisa ter de 6 a 64 caracteres.'});
+   DB.users=DB.users||{};if(DB.users[tel])return J(res,409,{erro:'Este WhatsApp já tem conta. Toque em "Já tenho conta" e entre com a senha.'});mark('r'+ip);
+   const salt=crypto.randomBytes(16).toString('hex'),hash=hashPw(senha,salt);DB.users[tel]={nome,salt,hash,criado:today()};
+   return J(res,200,{token:mkTok('c',tel,90,hash.slice(0,6)),nome,tel})}
+  if(req.method=='POST'&&p=='/api/conta/entrar'){const b=await rd(req),tel=normTel(b.tel),k='l'+ip+tel;if(recent(k,9e5).length>=8)return J(res,429,{erro:'Muitas tentativas. Aguarde 15 minutos.'});
+   const u=(DB.users||{})[tel],ok=u&&crypto.timingSafeEqual(Buffer.from(hashPw(String(b.senha||''),u.salt),'hex'),Buffer.from(u.hash,'hex'));
+   if(!ok){mark(k);return J(res,401,{erro:'WhatsApp ou senha incorretos.'})}
+   return J(res,200,{token:mkTok('c',tel,90,u.hash.slice(0,6)),nome:u.nome,tel})}
+  if(req.method=='GET'&&p=='/api/conta'){const u=userOf(req);if(!u)return J(res,401,{erro:'Entre na sua conta.'});
+   return J(res,200,{nome:u.nome,tel:u.tel,pedidos:DB.ped.filter(o=>o.conta==u.tel).map(({id,desc,total,st,pago,prazo,d})=>({id,desc,total,st,pago:!!pago,prazo:prazo||'',d})).reverse()})}
  if(p.startsWith('/api/admin')){
   if(!PIN)return J(res,503,{erro:'Defina a variável ADMIN_PIN no Render.'});
   if(recent('a'+ip,9e5).length>=10)return J(res,429,{erro:'Muitas tentativas. Aguarde 15 minutos.'});
-  if(!crypto.timingSafeEqual(h(req.headers['x-pin']||''),h(PIN))){mark('a'+ip);return J(res,401,{erro:'PIN incorreto'})}
-  if(req.method=='GET'&&p=='/api/admin')return J(res,200,DB);
+  if(req.method=='POST'&&p=='/api/admin/login'){const b0=await rd(req);if(!crypto.timingSafeEqual(h(b0.pin||''),h(PIN))){mark('a'+ip);return J(res,401,{erro:'PIN incorreto'})}return J(res,200,{token:mkTok('a','admin',30,pinTag())})}
+  const xp=String(req.headers['x-pin']||''),vt=vfTok(xp,'a');
+  if(!((vt&&vt.extra==pinTag())||crypto.timingSafeEqual(h(xp),h(PIN)))){if(!/^[\w-]+\.[\w-]+$/.test(xp))mark('a'+ip);return J(res,401,{erro:'PIN incorreto'})}
+  if(req.method=='GET'&&p=='/api/admin')return J(res,200,adminView());
   if(req.method!='POST')return J(res,404,{erro:'Não encontrado'});
   if(p=='/api/admin/foto')return foto(req,res);
   const b=await rd(req);
@@ -90,6 +112,7 @@ async function api(req,res,u,ip){
   else if(p=='/api/admin/pedido/del'){const l=b.todos?DB.ped.filter(o=>o.st=='Cancelado'&&!o.pago):DB.ped.filter(o=>o.id==b.id);
    if(!b.todos){const o=l[0];if(!o)return J(res,404,{erro:'Pedido não encontrado'});if(o.st!='Cancelado')return J(res,409,{erro:'Só pedidos cancelados podem ser excluídos.'});if(o.pago)return J(res,409,{erro:'Este pedido está marcado como pago. Desmarque o Pago antes de excluir.'})}
    const ids=new Set(l.map(o=>o.id));DB.ped=DB.ped.filter(o=>!ids.has(o.id));DB.fin=DB.fin.filter(f=>!ids.has(f.pid))}
+  else if(p=='/api/admin/cliente/del'){const t=normTel(b.tel);if(!DB.users||!DB.users[t])return J(res,404,{erro:'Cliente não encontrado'});delete DB.users[t]}
   else if(p=='/api/admin/produto'){const o={nome:str(b.nome,80),cat:str(b.cat,30),preco:+b.preco,est:Math.floor(+b.est),tags:str(b.tags,120),img:str(b.img,200),ativo:b.ativo!==false};
    if(!o.nome||!o.cat||!(o.preco>=0&&o.preco<=1e5)||!(o.est>=0&&o.est<=1e5)||(o.img&&!/^tg:[A-Za-z0-9_-]{20,200}$/.test(o.img)))return J(res,400,{erro:'Dados inválidos'});
    if(b.id){const x=DB.prod.find(y=>y.id==b.id&&y.id!=8);if(!x)return J(res,404,{erro:'Produto não encontrado'});Object.assign(x,o)}else DB.prod.push({id:Math.max(8,...DB.prod.map(y=>y.id))+1,...o})}
